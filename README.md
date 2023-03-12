@@ -2,7 +2,7 @@
 
 ## igv_render (2023-03-11)
 
-Modified based on [sbx_igv](https://github.com/sunbeam-labs/sbx_igv), igv_render generate an alignment image, given a genome, list of bam files, list of segments.
+Modified based on [sbx_igv](https://github.com/sunbeam-labs/sbx_igv), igv_render generate an alignment image, given a genome, list of bam files, list of segments. IGVtools commands can refer to [here](https://software.broadinstitute.org/software/igv/automation).
 
 ### Install IGVtools
 
@@ -20,5 +20,5 @@ python render_igv.py \
     --outdir example_data/igv_outputs 
 ```
 
-IGVtools commands can refer [here](https://software.broadinstitute.org/software/igv/automation).
+
 
