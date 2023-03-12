@@ -1,6 +1,6 @@
 # Diagnotics and Analysis Codes for MIDAS2
 
-## 2023-03-11 IGV_RENDER
+## igv_render (2023-03-11)
 
 Modified based on [sbx_igv](https://github.com/sunbeam-labs/sbx_igv), igv_render generate an alignment image, given a genome, list of bam files, list of segments.
 
