@@ -4,6 +4,15 @@
 
 Modified based on [sbx_igv](https://github.com/sunbeam-labs/sbx_igv), igv_render generate an alignment image, given a genome, list of bam files, list of segments.
 
+### Install IGVtools
+
+```
+conda install -c bioconda igv
+conda install -c conda-forge xvfbwrapper
+pip install python-libxdo
+```
+
+### Example Command
 ```
 python render_igv.py \
     --genome_fasta /pollard/home/czhao/igv_data/bt2_index_biohub/repgenomes.fa \
