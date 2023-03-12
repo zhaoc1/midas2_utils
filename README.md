@@ -6,7 +6,7 @@ Modified based on [sbx_igv](https://github.com/sunbeam-labs/sbx_igv), igv_render
 
 ```
 python render_igv.py \
-    --genome_fasta /pollard/home/czhao/2023-03-10-IGV/igv_data/bt2_index_biohub/repgenomes.fa \
+    --genome_fasta /pollard/home/czhao/igv_data/bt2_index_biohub/repgenomes.fa \
     --bamfiles example_data/list_of_bams  --segment_file example_data/list_of_segments \
     --outdir example_data/igv_outputs 
 ```
