@@ -1,0 +1,212 @@
+---
+title: "MIDAS2 SNV Track Plot"
+author: "Chunyu Zhao"
+date: \today
+output: 
+  pdf_document:
+    toc: true
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(
+  echo=FALSE,
+  warning=FALSE,
+  message=FALSE,
+  fig.width = 12,
+  fig.height = 6,
+  cache=FALSE
+  )
+```
+
+
+```{r}
+library(tidyverse)
+library(readr)
+library(stringr)
+library(reshape2)
+library(readxl)
+library(pander)
+library(magrittr)
+library(forcats)
+library(data.table)
+library(grid)
+library(gridExtra)
+library(RColorBrewer)
+library(pheatmap)
+library(ggbeeswarm)
+
+library(ape)
+library(vegan)
+library(seqinr)
+library("Biostrings")
+library(DescTools)
+library(data.table)
+library(assertthat)
+library(ggsci)
+
+options(scipen=999)
+panderOptions('knitr.auto.asis', FALSE)
+
+specify_decimal <- function(x, k) as.numeric(trimws(format(round(x, k), nsmall=k)))
+```
+
+
+# Questions
+
+1. Does the marker_coverage is consistent with the species_median_coverage from the Species flow?
+2. Apply <gene, sample> filter
+3. Define core genes
+4. Expected output
+
+# Correlation
+
+```{r}
+species_median_marker <- read_delim("midas2_output/merge/species/species_marker_median_coverage.tsv", delim = "\t", show_col_types = F)
+
+species_median_marker %<>% 
+  gather(sample_name, median_marker_coverage, setdiff(colnames(species_median_marker), c("species_id")))
+
+
+genes_summary <- read_delim("midas2_output/merge/genes/genes_summary.tsv", delim = "\t", show_col_types = F)
+
+genes_marker <- genes_summary %>% select(species_id, sample_name, marker_coverage) %>% 
+  dplyr::rename(median_marker_coverage_genes = marker_coverage)
+
+
+metadata <- read_delim("metadata.csv", delim = ",", show_col_types = F) %>%
+  select(`NCBI.Accession.Number`, Diagnosis) %>%
+  mutate(Diagnosis = as.character(Diagnosis))
+colnames(metadata) <- c("sample_name", "disease_status")
+
+
+genes_marker %<>% left_join(metadata, by=c("sample_name"))
+marker_cov <- left_join(genes_marker, species_median_marker, by=c("species_id", "sample_name"))
+
+qc <- read_delim("reports/preprocess_summary.tsv", delim = "\t", show_col_types = F) %>% 
+  select(Samples, nonhost) %>% 
+  dplyr::rename(sample_name = Samples)
+```
+
+**TODO**: remove samples with low total read counts: e.g. minimal 1M (?)
+
+```{r}
+snps_summary <- read_delim("midas2_output/merge/snps/snps_summary.tsv", delim = "\t", show_col_types = F)
+snps_summary %<>% left_join(metadata, by=c("sample_name")) %>%
+  select(sample_name, species_id, fraction_covered, mean_coverage, disease_status, aligned_reads, mapped_reads, genome_length) 
+snps_summary %<>% left_join(qc, by=c("sample_name"))
+```
+
+
+```{r}
+snps_summary %>%
+  ggplot(aes(x = disease_status, y = nonhost)) + 
+  geom_quasirandom() + 
+  scale_y_log10()
+
+snps_summary %>%
+  ggplot(aes(x = disease_status, y = mapped_reads)) + 
+  geom_quasirandom() + 
+  scale_y_log10()
+
+snps_summary %>%
+  ggplot(aes(x = disease_status, y = fraction_covered)) + 
+  geom_quasirandom()
+
+snps_summary %>%
+  ggplot(aes(x = disease_status, y = mean_coverage)) + 
+  geom_quasirandom() + 
+  scale_y_log10()
+```
+
+
+```{r}
+
+spid = 101338
+
+plot_snv_track <- function(spid) {
+  snps_info <- read_delim(file.path("midas2_output/merge/snps", spid, paste(spid, ".snps_info.tsv", sep="")), delim = "\t", show_col_types = F)
+snps_info %<>% mutate(site_id = gsub("gnl\\|Prokka\\|", "", site_id))
+
+snps_info %<>% separate(site_id, into=c("ref_id", "ref_pos", "ref_allele"), sep="\\|", remove = F) %>%
+  mutate(ref_pos = as.numeric(ref_pos))
+
+  
+list_of_contigs <- unique(snps_info$ref_id)
+for (cid in list_of_contigs) {
+  fdir <- file.path("2023-03-09-Figure", spid)
+  dir.create(fdir, recursive = T, showWarnings=F)
+  
+  cinfo <- snps_info %>% filter(ref_id == cid)
+  cxmin <- min(cinfo$ref_pos)
+  cxmax <- max(cinfo$ref_pos)
+  
+    
+  c_popminor <- cinfo %>% select(site_id, sc_A:sc_T, sample_counts) %>%
+    gather(pop_allele, pop_sc, sc_A:sc_T) %>%
+    filter(pop_sc > 0 ) %>%
+    mutate(pop_allele = gsub("sc_", "", pop_allele)) %>%
+    group_by(site_id) %>% 
+    arrange(desc(pop_sc)) %>% 
+    dplyr::slice(2) %>%
+    ungroup() %>% 
+    mutate(pop_freq = round(pop_sc / sample_counts, 3))
+  
+  c_popmajor <- cinfo %>% select(site_id, sc_A:sc_T, sample_counts) %>%
+    gather(pop_allele, pop_sc, sc_A:sc_T) %>%
+    filter(pop_sc > 0 ) %>%
+    mutate(pop_allele = gsub("sc_", "", pop_allele)) %>%
+    group_by(site_id) %>% 
+    arrange(desc(pop_sc)) %>% 
+    dplyr::slice(1) %>%
+    ungroup() %>% 
+    mutate(pop_freq = round(pop_sc / sample_counts, 3))
+    
+  
+  stopifnot(cinfo %>%
+    left_join(c_popmajor, by=c("site_id", "sample_counts")) %>%
+    filter(major_allele != pop_allele) %>% nrow() == 0)
+  stopifnot(cinfo %>%
+    left_join(c_popminor, by=c("site_id", "sample_counts")) %>%
+    filter(minor_allele != pop_allele) %>% nrow() == 0) 
+
+  block_size = 10000
+  csegs <- seq(cxmin, cxmax, block_size)
+  for (ci in 1:length(csegs)) {
+    hi = csegs[ci] + block_size
+    pinfo <- cinfo %>% filter(ref_pos >= csegs[ci] & ref_pos < hi)
+    
+    pdf <- pinfo %>%
+      left_join(c_popminor, by=c("site_id", "sample_counts")) %>%
+      select(ref_pos, pop_freq)
+    
+    fdf <- data.frame(ref_pos = seq(csegs[ci], csegs[ci] + block_size - 1), freq = 0)
+    fdf %<>% left_join(pdf, by=c("ref_pos")) %>% 
+      mutate(pop_freq = ifelse(is.na(pop_freq), 0, as.numeric(pop_freq))) %>%
+      select(-freq)
+    
+    
+    f <- pdf %>%
+      left_join(pinfo, by=c("ref_pos")) %>%
+      ggplot(aes(x = ref_pos, y = pop_freq)) + 
+      geom_point(aes(color = snp_type, shape = locus_type)) + 
+      scale_color_npg() +
+      ggtitle(paste(cid, ":", csegs[ci], "-", hi, sep=""))
+    ggsave(file.path(fdir, paste(cid, "_", str_pad(ci, 6, pad = "0"), ".pdf", sep="")), f, width = 12, height = 5)
+    }
+  }
+}
+
+
+
+```
+
+
+```{r}
+list_of_species=c(101338,102478,104158,102492,102528,101346)
+lapply(list_of_species, plot_snv_track)
+```
+
+
