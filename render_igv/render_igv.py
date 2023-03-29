@@ -114,12 +114,12 @@ def read_bamlist(bamfile_fp):
     return list_of_bams
 
 
-def read_segments(gseg_fp):
-    list_of_segments = []
+def load_locus_list(gseg_fp):
+    list_of_locus = []
     with open(gseg_fp) as stream:
         for line in stream:
-            list_of_segments.append(line.strip("\n"))
-    return list_of_segments
+            list_of_locus.append(line.strip("\n"))
+    return list_of_locus
 
 
 def compute_genome_length(genome_file):
@@ -150,7 +150,7 @@ def main():
         "--segment_file", required=False,
         type=str,
         default = [],
-        help=f"List of contig ids.")
+        help=f"Genome segments. Format: CHROM:START-END. Per segment each row. CHROM is required.")
 
 
     args = p.parse_args()
@@ -159,21 +159,29 @@ def main():
     glen_dict = compute_genome_length(genome_file)
 
     if len(args.segment_file):
-        genome_segments = read_segments(args.segment_file)
+        genome_segments = load_locus_list(args.segment_file)
+        assert len(genome_segments), f"Genome Segment File Is Empty"
     else:
-        genome_segments = read_seq_ids(genome_file) #<-- this takes a long time
+        print("This takes a long time")
+        genome_segments = read_seq_ids(genome_file)
 
     list_of_bams = read_bamlist(args.bamfiles)
 
     Path(args.outdir).mkdir(parents = True, exist_ok=True)
 
-    window_size = 40000
-    for segment in genome_segments:
-        segment_length = glen_dict[segment]
-        for lower_bound in range(0, segment_length, window_size):
-            upper_bound = min(segment_length, lower_bound + window_size)
-            locus = f"{segment}:{lower_bound}-{upper_bound}"
-            outpng = f"{args.outdir}/{segment}:{lower_bound}-{upper_bound}.png"
+    if ":" in genome_segments[0]:
+        for locus in genome_segments:
+            segment = locus.split(":")[0]
+            outpng = f"{args.outdir}/{locus}.png"
             render(genome=genome_file, bams=sorted(list_of_bams), imagefile=outpng, seqID=segment, locus = locus, igv_prefs=IGV_PREFS)
+    else:
+        window_size = 40000
+        for segment in genome_segments:
+            segment_length = glen_dict[segment]
+            for lower_bound in range(0, segment_length, window_size):
+                upper_bound = min(segment_length, lower_bound + window_size)
+                locus = f"{segment}:{lower_bound}-{upper_bound}"
+                outpng = f"{args.outdir}/{locus}.png"
+                render(genome=genome_file, bams=sorted(list_of_bams), imagefile=outpng, seqID=segment, locus = locus, igv_prefs=IGV_PREFS)
 
 main()
