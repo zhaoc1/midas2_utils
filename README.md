@@ -28,13 +28,23 @@ R script to generate SNV track plot based on MIDAS2 `snps_info.tsv`.
 TODO: 
 - Either keep the fixed sites for the `merge_snps`, Or compute the mean site depth across samples for the fixed sites.
 
+Run blast command [pyblastc](https://github.com/zhaoc1/pyblastc)
+```
+blastn  -query {input.contigs} \
+        -db {params.db} \
+        -outfmt '6 qseqid sseqid pident qlen slen length mismatch gapopen qstart qend sstart send evalue bitscore' \
+        -num_threads {threads} -evalue 1e-10 \
+        -max_target_seqs 5000 \
+        -out {output}
+```
 
 ## Blast results plot
+
 
 ```
 df <- read_delim("blast_outfmt6.tsv", delim = "\t", col_names = F, show_col_types = F)
 
-df <- df %>% set_colnames(c("qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "e_value", "bit_score"))
+df <- df %>% set_colnames(c("qseqid", "sseqid", "pident", "qlen", "slen", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "e_value", "bit_score"))
 
 df %>%
   mutate(xmin = pmin(qstart, qend), xmax = pmax(qstart, qend)) %>%
